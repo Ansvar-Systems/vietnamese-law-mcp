@@ -1,0 +1,183 @@
+{
+  "$schema": "./golden-tests.schema.json",
+  "version": "1.0",
+  "mcp_name": "Vietnamese Law MCP",
+  "description": "Golden contract tests for the Vietnamese Law MCP covering Cybersecurity Law, Personal Data Protection Decree, Law on Information Technology, Enterprise Law, Law on E-Transactions, and Law on Protection of Consumer Rights",
+  "tests": [
+    {
+      "id": "vn-001",
+      "category": "article_retrieval",
+      "description": "Retrieve Article 2 of the Cybersecurity Law 2018 (No. 24/2018/QH14) -- definitions and interpretation",
+      "tool": "get_provision",
+      "input": {
+        "law_identifier": "Law No. 24/2018/QH14",
+        "article": "2"
+      },
+      "assertions": {
+        "result_not_empty": true,
+        "text_contains": ["cybersecurity", "an ninh mang"],
+        "fields_present": ["text", "article_number"],
+        "text_not_empty": true
+      }
+    },
+    {
+      "id": "vn-002",
+      "category": "article_retrieval",
+      "description": "Retrieve Article 2 of the Personal Data Protection Decree 2023 (Decree 13/2023/ND-CP) -- definitions including personal data",
+      "tool": "get_provision",
+      "input": {
+        "law_identifier": "Decree No. 13/2023/ND-CP",
+        "article": "2"
+      },
+      "assertions": {
+        "result_not_empty": true,
+        "any_result_contains": ["personal data", "du lieu ca nhan", "data subject"],
+        "fields_present": ["text", "article_number"],
+        "text_not_empty": true
+      }
+    },
+    {
+      "id": "vn-003",
+      "category": "article_retrieval",
+      "description": "Retrieve Article 1 of the Enterprise Law 2020 (No. 59/2020/QH14) -- scope and application",
+      "tool": "get_provision",
+      "input": {
+        "law_identifier": "Law No. 59/2020/QH14",
+        "article": "1"
+      },
+      "assertions": {
+        "result_not_empty": true,
+        "any_result_contains": ["enterprise", "doanh nghiep", "business"],
+        "fields_present": ["text", "article_number"],
+        "text_not_empty": true
+      }
+    },
+    {
+      "id": "vn-004",
+      "category": "article_retrieval",
+      "description": "Retrieve Article 1 of the Law on E-Transactions 2023 (No. 20/2023/QH15) -- scope of regulation",
+      "tool": "get_provision",
+      "input": {
+        "law_identifier": "Law No. 20/2023/QH15",
+        "article": "1"
+      },
+      "assertions": {
+        "result_not_empty": true,
+        "any_result_contains": ["electronic transaction", "giao dich dien tu", "electronic"],
+        "fields_present": ["text"],
+        "text_not_empty": true
+      }
+    },
+    {
+      "id": "vn-005",
+      "category": "search",
+      "description": "Full-text search for 'du lieu ca nhan' returns personal data protection provisions",
+      "tool": "search_legislation",
+      "input": {
+        "query": "du lieu ca nhan"
+      },
+      "assertions": {
+        "result_not_empty": true,
+        "min_results": 1,
+        "any_result_contains": ["personal data", "du lieu ca nhan", "Decree 13/2023"]
+      }
+    },
+    {
+      "id": "vn-006",
+      "category": "search",
+      "description": "Full-text search for 'an ninh mang' returns Cybersecurity Law provisions",
+      "tool": "search_legislation",
+      "input": {
+        "query": "an ninh mang"
+      },
+      "assertions": {
+        "result_not_empty": true,
+        "min_results": 1,
+        "any_result_contains": ["Cybersecurity", "an ninh mang", "24/2018"]
+      }
+    },
+    {
+      "id": "vn-007",
+      "category": "search",
+      "description": "Full-text search for 'giao dich dien tu' returns E-Transactions Law provisions",
+      "tool": "search_legislation",
+      "input": {
+        "query": "giao dich dien tu"
+      },
+      "assertions": {
+        "result_not_empty": true,
+        "min_results": 1,
+        "any_result_contains": ["E-Transactions", "electronic transaction", "giao dich dien tu"]
+      }
+    },
+    {
+      "id": "vn-008",
+      "category": "citation_roundtrip",
+      "description": "Citation for Cybersecurity Law Article 26 (data localization) includes thuvienphapluat.vn or vanban.chinhphu.vn URL pattern",
+      "tool": "get_provision",
+      "input": {
+        "law_identifier": "Law No. 24/2018/QH14",
+        "article": "26"
+      },
+      "assertions": {
+        "result_not_empty": true,
+        "citation_url_pattern": "(thuvienphapluat\\.vn|vanban\\.chinhphu\\.vn)",
+        "text_not_empty": true
+      }
+    },
+    {
+      "id": "vn-009",
+      "category": "citation_roundtrip",
+      "description": "Citation for Information Technology Law Article 1 includes official identifier",
+      "tool": "get_provision",
+      "input": {
+        "law_identifier": "Law on Information Technology 2006",
+        "article": "1"
+      },
+      "assertions": {
+        "result_not_empty": true,
+        "fields_present": ["text"],
+        "text_not_empty": true
+      }
+    },
+    {
+      "id": "vn-010",
+      "category": "eu_cross_reference",
+      "description": "Personal Data Protection Decree cross-reference to GDPR -- Decree 13/2023 has GDPR-influenced provisions",
+      "tool": "get_provision_eu_basis",
+      "input": {
+        "law_identifier": "Decree No. 13/2023/ND-CP"
+      },
+      "assertions": {
+        "result_not_empty": true,
+        "any_result_contains": ["GDPR", "General Data Protection Regulation", "2016/679", "data protection"]
+      }
+    },
+    {
+      "id": "vn-011",
+      "category": "negative_test",
+      "description": "Non-existent Vietnamese law returns graceful error or empty result",
+      "tool": "get_provision",
+      "input": {
+        "law_identifier": "Law No. 999/2099/QH99 Fictional Space Law",
+        "article": "1"
+      },
+      "assertions": {
+        "handles_gracefully": true
+      }
+    },
+    {
+      "id": "vn-012",
+      "category": "negative_test",
+      "description": "Malformed article number returns graceful error or empty result",
+      "tool": "get_provision",
+      "input": {
+        "law_identifier": "Law No. 24/2018/QH14",
+        "article": "999ZZZ-INVALID"
+      },
+      "assertions": {
+        "handles_gracefully": true
+      }
+    }
+  ]
+}

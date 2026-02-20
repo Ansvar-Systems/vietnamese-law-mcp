@@ -1,0 +1,69 @@
+# sources.yml
+schema_version: "1.0"
+mcp_name: "Vietnamese Law MCP"
+jurisdiction: "VN"
+
+sources:
+  - name: "Thu Vien Phap Luat (Legal Library)"
+    authority: "LawNet / Vietnamese legal information services"
+    official_portal: "https://thuvienphapluat.vn"
+    canonical_identifier: "N/A (Vietnamese legislation identified by type, number/year, and issuing body, e.g., 'Luat so 24/2018/QH14')"
+    retrieval_method: "HTML_SCRAPE"
+    api_documentation: "N/A (comprehensive legal database with structured search and browse functionality)"
+    update_frequency: "weekly"
+    last_ingested: "PENDING_FIRST_INGEST"
+    license_or_terms:
+      type: "Open Access"
+      url: "https://thuvienphapluat.vn"
+      summary: "Comprehensive Vietnamese legal database providing access to Laws (Luat), Decrees (Nghi dinh), Circulars (Thong tu), and other regulatory instruments; legislation text is accessible as government work product; some translations available"
+    coverage:
+      scope: "Laws (Luat) passed by the National Assembly, Decrees (Nghi dinh) of the Government, Circulars (Thong tu) of Ministries, Resolutions, and Decisions; covers the Cybersecurity Law 2018 (No. 24/2018/QH14), Personal Data Protection Decree 2023 (Decree 13/2023/ND-CP), Law on Information Technology 2006, Enterprise Law 2020 (No. 59/2020/QH14), Law on E-Transactions 2023 (No. 20/2023/QH15), and Law on Protection of Consumer Rights 2023"
+      limitations: "Primarily in Vietnamese; English translations are available for some major laws but may not reflect the most recent amendments; implementing circulars may lag behind decree issuance"
+    languages:
+      - "vi"
+      - "en"
+
+  - name: "Official Gazette (Van Ban Chinh Phu)"
+    authority: "Government of the Socialist Republic of Vietnam"
+    official_portal: "https://vanban.chinhphu.vn"
+    canonical_identifier: "N/A (official gazette entries identified by document number, type, and issuing body)"
+    retrieval_method: "HTML_SCRAPE"
+    api_documentation: "N/A"
+    update_frequency: "weekly"
+    last_ingested: "PENDING_FIRST_INGEST"
+    license_or_terms:
+      type: "Government Open Data"
+      url: "https://vanban.chinhphu.vn"
+      summary: "Official government portal for Vietnamese legal documents; provides authoritative text of Laws, Decrees, Decisions, and Circulars as published by the Government"
+    coverage:
+      scope: "Official text of Laws, Decrees, Government Resolutions, Prime Minister Decisions, and Ministerial Circulars; authoritative source for all government-issued legal documents"
+      limitations: "Vietnamese language only for official text; historical documents may have limited digitization; some documents may be published in PDF format requiring parsing"
+    languages:
+      - "vi"
+
+data_freshness:
+  automated_checks: true
+  check_frequency: "weekly"
+  last_verified: "PENDING_FIRST_INGEST"
+
+# Notes:
+# - Vietnam uses a civil law system based on socialist legal traditions with influences from
+#   French civil law and Soviet law
+# - The 2013 Constitution is the supreme law; Article 21 recognizes the right to privacy of
+#   personal life, family secrets, and correspondence
+# - Vietnam does NOT have a standalone comprehensive data protection law; Decree 13/2023/ND-CP
+#   is the primary personal data protection regulation (a decree, not a law)
+# - The Cybersecurity Law 2018 (No. 24/2018/QH14) includes data localization requirements
+#   for domestic and foreign service providers
+# - The Ministry of Public Security (MPS) is the primary authority for cybersecurity
+# - The Ministry of Information and Communications (MIC) regulates IT and telecommunications
+# - Cross-border data transfer restrictions under the Cybersecurity Law and Decree 13/2023
+#   require impact assessments and registration with the government
+# - Vietnamese legislation numbering includes the type, number, year, and issuing body:
+#   e.g., 24/2018/QH14 = Law No. 24, Year 2018, 14th National Assembly
+#   e.g., 13/2023/ND-CP = Decree No. 13, Year 2023, Government (Chinh Phu)
+# - Vietnamese (tieng Viet) is the legally binding language; English translations are
+#   unofficial and may contain inaccuracies
+# - The Law on E-Transactions 2023 replaces the 2005 version with modernized provisions
+# - The Law on Protection of Consumer Rights 2023 replaces the 2010 version
+# - Vietnam is an ASEAN member and participates in ASEAN digital governance frameworks

@@ -1,0 +1,20 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "eu.ansvar/vietnamese-law-mcp",
+  "description": "Vietnamese law database covering Cybersecurity Law, Personal Data Protection Decree, Law on Information Technology, Enterprise Law, Law on E-Transactions, and Consumer Rights Protection with full-text search",
+  "repository": {
+    "url": "https://github.com/Ansvar-Systems/vietnamese-law-mcp",
+    "source": "github"
+  },
+  "homepage": "https://ansvar.eu",
+  "version": "1.0.0",
+  "license": "Apache-2.0",
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "@ansvar/vietnamese-law-mcp",
+      "version": "1.0.0",
+      "transport": { "type": "stdio" }
+    }
+  ]
+}

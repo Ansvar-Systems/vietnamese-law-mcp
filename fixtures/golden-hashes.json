@@ -1,0 +1,56 @@
+{
+  "$schema": "./golden-hashes.schema.json",
+  "version": "1.0",
+  "mcp_name": "Vietnamese Law MCP",
+  "jurisdiction": "VN",
+  "provisions": [
+    {
+      "id": "vn-hash-001",
+      "description": "2013 Constitution Article 21 -- right to privacy of personal life, family secrets, and correspondence; constitutional basis for data protection",
+      "upstream_url": "https://vanban.chinhphu.vn/default.aspx?pageid=27160&docid=171264",
+      "selector_hint": "Dieu 21 (Article 21)",
+      "expected_sha256": "COMPUTE_ON_FIRST_INGEST",
+      "expected_snippet": "privacy of personal life"
+    },
+    {
+      "id": "vn-hash-002",
+      "description": "Cybersecurity Law 2018 (No. 24/2018/QH14) Article 1 -- scope and regulated entities",
+      "upstream_url": "https://thuvienphapluat.vn/van-ban/Cong-nghe-thong-tin/Luat-An-ninh-mang-2018-351416.aspx",
+      "selector_hint": "Dieu 1 (Article 1)",
+      "expected_sha256": "COMPUTE_ON_FIRST_INGEST",
+      "expected_snippet": "an ninh mang"
+    },
+    {
+      "id": "vn-hash-003",
+      "description": "Personal Data Protection Decree 2023 (Decree 13/2023/ND-CP) Article 1 -- scope of regulation on personal data protection",
+      "upstream_url": "https://thuvienphapluat.vn/van-ban/Cong-nghe-thong-tin/Nghi-dinh-13-2023-ND-CP-bao-ve-du-lieu-ca-nhan-559462.aspx",
+      "selector_hint": "Dieu 1 (Article 1)",
+      "expected_sha256": "COMPUTE_ON_FIRST_INGEST",
+      "expected_snippet": "du lieu ca nhan"
+    },
+    {
+      "id": "vn-hash-004",
+      "description": "Enterprise Law 2020 (No. 59/2020/QH14) Article 1 -- scope of regulation on establishment, organization, and operation of enterprises",
+      "upstream_url": "https://thuvienphapluat.vn/van-ban/Doanh-nghiep/Luat-Doanh-nghiep-2020-434689.aspx",
+      "selector_hint": "Dieu 1 (Article 1)",
+      "expected_sha256": "COMPUTE_ON_FIRST_INGEST",
+      "expected_snippet": "doanh nghiep"
+    },
+    {
+      "id": "vn-hash-005",
+      "description": "Law on E-Transactions 2023 (No. 20/2023/QH15) Article 1 -- scope of regulation on electronic transactions",
+      "upstream_url": "https://thuvienphapluat.vn/van-ban/Cong-nghe-thong-tin/Luat-Giao-dich-dien-tu-2023-567255.aspx",
+      "selector_hint": "Dieu 1 (Article 1)",
+      "expected_sha256": "COMPUTE_ON_FIRST_INGEST",
+      "expected_snippet": "giao dich dien tu"
+    },
+    {
+      "id": "vn-hash-006",
+      "description": "Law on Information Technology 2006 Article 1 -- scope of regulation on information technology activities",
+      "upstream_url": "https://thuvienphapluat.vn/van-ban/Cong-nghe-thong-tin/Luat-Cong-nghe-thong-tin-2006-67-2006-QH11-12577.aspx",
+      "selector_hint": "Dieu 1 (Article 1)",
+      "expected_sha256": "COMPUTE_ON_FIRST_INGEST",
+      "expected_snippet": "cong nghe thong tin"
+    }
+  ]
+}
