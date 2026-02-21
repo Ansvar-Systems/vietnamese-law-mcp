@@ -1,9 +1,6 @@
 node_modules
-__tests__
-fixtures
-scripts
-src
+.git
 *.md
-!README.md
-tsconfig.json
-.github
+tests
+data/seed
+scripts
