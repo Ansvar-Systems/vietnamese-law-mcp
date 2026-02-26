@@ -1,8 +1,8 @@
 {
   "name": "@ansvar/vietnamese-law-mcp",
-  "version": "1.0.1",
+  "version": "2.0.0",
   "mcpName": "eu.ansvar/vietnamese-law-mcp",
-  "description": "Vietnamese law database covering Cybersecurity Law, Personal Data Protection Decree, Law on Information Technology, Enterprise Law, Law on E-Transactions, and Consumer Rights Protection with full-text search",
+  "description": "Comprehensive Vietnamese law database: 93 laws covering Constitution, Civil/Penal Codes, Cybersecurity Law, Personal Data Protection, Enterprise Law, E-Transactions, and 80+ more statutes with full-text search",
   "author": "Ansvar Systems <hello@ansvar.eu>",
   "license": "Apache-2.0",
   "repository": {
@@ -44,6 +44,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
+    "census": "node --import tsx scripts/census.ts",
     "ingest": "node --import tsx scripts/ingest.ts",
     "test:contract": "vitest run __tests__/contract/",
     "drift:detect": "node --import tsx scripts/drift-detect.ts",

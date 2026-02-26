@@ -9,8 +9,9 @@
  *   - "Khoản" (Clause/Paragraph) - sub-elements within articles (1., 2., ...)
  *   - "Điểm" (Point) - sub-elements within clauses (a), b), c), ...)
  *
- * Thu Vien Phap Luat serves legislation as HTML pages with a consistent structure.
- * Articles are marked with "Điều N." followed by the article title and content.
+ * Thu Vien Phap Luat marks articles with <a name="dieu_N"> anchor tags.
+ * This is the primary extraction method (reliable, handles all document sizes).
+ * Fallback: text-based "Điều N." pattern for other sources.
  *
  * Provision references use "dieu" prefix: dieu1, dieu2, dieu3, etc.
  */
@@ -59,11 +60,9 @@ export interface ParsedAct {
 
 /**
  * Strip HTML tags and decode common entities, normalising whitespace.
- * Converts block-level tags to newlines and inline tags to spaces.
  */
 function stripHtml(html: string): string {
   return html
-    // Convert block-level elements to newlines for paragraph separation
     .replace(/<\/?(p|div|tr|li|h[1-6]|br|section|article)\b[^>]*\/?>/gi, '\n')
     .replace(/<[^>]+>/g, ' ')
     .replace(/&nbsp;/g, ' ')
@@ -87,35 +86,215 @@ function stripHtml(html: string): string {
 /**
  * Parse Vietnamese legislation HTML to extract provisions (articles).
  *
- * Vietnamese statutes are structured with "Điều N." markers for each article.
- * We split the text on these markers and extract the article number, title,
- * and content. Chapter headings ("Chương ...") are tracked for context.
+ * Strategy:
+ * 1. Primary: Use <a name="dieu_N"> anchor tags (thuvienphapluat.vn standard)
+ *    - Find all unique anchors, extract content between consecutive anchors
+ * 2. Fallback: Text-based "Điều N." pattern (for other HTML sources)
  *
- * This parser handles both thuvienphapluat.vn and vanban.chinhphu.vn HTML.
- * On thuvienphapluat.vn, article markers may appear inline (not on new lines)
- * because the HTML structure uses spans/divs that collapse to inline text.
- * We therefore match "Điều N." regardless of position, not just at line starts.
+ * Chapter headings ("Chương ...") are tracked for context.
  */
 export function parseVietnameseHtml(html: string, act: ActIndexEntry): ParsedAct {
+  // Try anchor-based extraction first (primary method for thuvienphapluat.vn)
+  const anchorResult = parseByAnchors(html, act);
+  if (anchorResult.provisions.length > 5) {
+    return anchorResult;
+  }
+
+  // Fallback: text-based parsing
+  return parseByTextPatterns(html, act);
+}
+
+/**
+ * Primary parser: extract articles using <a name="dieu_N"> anchors.
+ *
+ * thuvienphapluat.vn HTML structure:
+ *   <a name="dieu_N"><b>Điều N. Title text</b></a>
+ *   <p>Content paragraphs...</p>
+ *   ...
+ *   <a name="dieu_N+1">...
+ *
+ * The anchors appear twice (once in TOC, once in body). We deduplicate
+ * and keep the version with the most content.
+ */
+function parseByAnchors(html: string, act: ActIndexEntry): ParsedAct {
   const provisions: ParsedProvision[] = [];
   const definitions: ParsedDefinition[] = [];
 
-  // First, extract the main content area and convert to text.
-  // thuvienphapluat.vn wraps content in various divs; we strip tags and
-  // work with the plain text to reliably detect "Điều N." patterns.
+  // Find all anchor positions: <a name="dieu_N">
+  const anchorPattern = /<a\s+name="dieu_(\d+[a-zA-Z]?)"\s*>/gi;
+  const anchors: { num: string; index: number }[] = [];
+  let match: RegExpExecArray | null;
+
+  while ((match = anchorPattern.exec(html)) !== null) {
+    anchors.push({ num: match[1], index: match.index });
+  }
+
+  if (anchors.length === 0) {
+    return {
+      id: act.id, type: 'statute', title: act.title, title_en: act.titleEn,
+      short_name: act.shortName, status: act.status, issued_date: act.issuedDate,
+      in_force_date: act.inForceDate, url: act.url, description: act.description,
+      provisions: [], definitions: [],
+    };
+  }
+
+  // Find chapter headings in HTML using <a name="chuong_N"> or text patterns
+  const chapterAnchors: { pos: number; name: string }[] = [];
+  const chapterHtmlPattern = /<a\s+name="chuong_[^"]*"[^>]*>[\s\S]*?<\/a>[\s\S]*?(Ch[uư][oơ]ng\s+[IVXLCDM]+[\s\S]*?)(?=<\/[a-z])/gi;
+  let chapterMatch: RegExpExecArray | null;
+  while ((chapterMatch = chapterHtmlPattern.exec(html)) !== null) {
+    const name = stripHtml(chapterMatch[1]).replace(/\s+/g, ' ').trim().substring(0, 200);
+    if (name.length > 3) {
+      chapterAnchors.push({ pos: chapterMatch.index, name });
+    }
+  }
+
+  // Also detect chapters from bold text patterns in the HTML
+  const chapterBoldPattern = /<b[^>]*>\s*(Ch[uư][oơ]ng\s+[IVXLCDM]+[^<]*)<\/b>/gi;
+  while ((chapterMatch = chapterBoldPattern.exec(html)) !== null) {
+    const name = stripHtml(chapterMatch[1]).replace(/\s+/g, ' ').trim().substring(0, 200);
+    if (name.length > 3) {
+      chapterAnchors.push({ pos: chapterMatch.index, name });
+    }
+  }
+
+  // Sort chapter positions
+  chapterAnchors.sort((a, b) => a.pos - b.pos);
+
+  // Deduplicate anchors: keep the LAST occurrence of each dieu_N
+  // (first occurrence is usually the TOC, last occurrence is the actual article)
+  const lastOccurrence = new Map<string, number>();
+  for (let i = 0; i < anchors.length; i++) {
+    lastOccurrence.set(anchors[i].num, i);
+  }
+
+  // Collect unique anchors in order (using last occurrence indices)
+  const uniqueIndices = Array.from(lastOccurrence.values()).sort((a, b) => a - b);
+  const uniqueAnchors = uniqueIndices.map(i => anchors[i]);
+
+  // Track seen article numbers for final dedup
+  const seenArticles = new Map<string, number>();
+
+  for (let i = 0; i < uniqueAnchors.length; i++) {
+    const anchor = uniqueAnchors[i];
+    const nextAnchor = i + 1 < uniqueAnchors.length ? uniqueAnchors[i + 1] : null;
+
+    // Extract HTML between this anchor and the next
+    const startIdx = anchor.index;
+    const endIdx = nextAnchor ? nextAnchor.index : Math.min(startIdx + 50000, html.length);
+    const segment = html.substring(startIdx, endIdx);
+
+    // Convert segment to plain text
+    const plainSegment = stripHtml(segment);
+
+    // Skip very short segments (likely just a cross-reference in TOC)
+    if (plainSegment.length < 20) continue;
+
+    const articleNum = anchor.num;
+    const provisionRef = `dieu${articleNum}`;
+
+    // Extract title: look for "Điều N. Title" pattern in the segment
+    const titleMatch = plainSegment.match(/Đi[eề]u\s+\d+[a-zA-Z]?\s*\.\s*(.+?)(?:\n|$)/);
+    let title: string;
+    let content: string;
+
+    if (titleMatch && titleMatch[1]) {
+      title = titleMatch[1].trim();
+      // Content starts from "Điều N. Title\n..."
+      const afterTitle = plainSegment.substring(titleMatch.index! + titleMatch[0].length).trim();
+      content = (titleMatch[0].trim() + '\n' + afterTitle).trim();
+    } else {
+      // No clear title pattern, use first line
+      const firstNewline = plainSegment.indexOf('\n');
+      if (firstNewline > 0 && firstNewline < 300) {
+        title = plainSegment.substring(0, firstNewline).trim();
+        content = plainSegment.trim();
+      } else {
+        title = plainSegment.substring(0, Math.min(120, plainSegment.length)).trim();
+        if (title.length < plainSegment.length) title += '...';
+        content = plainSegment.trim();
+      }
+    }
+
+    // Clean title: remove "Điều N." prefix from title if present
+    title = title.replace(/^Đi[eề]u\s+\d+[a-zA-Z]?\s*\.\s*/, '').trim();
+    if (!title) title = `Điều ${articleNum}`;
+
+    // Skip if content is too short
+    if (content.length < 15) continue;
+
+    // Determine current chapter
+    let currentChapter: string | undefined;
+    for (const ch of chapterAnchors) {
+      if (ch.pos < startIdx) {
+        currentChapter = ch.name;
+      }
+    }
+
+    // Deduplicate: keep version with more content
+    const existingIdx = seenArticles.get(articleNum);
+    if (existingIdx !== undefined) {
+      if (content.length > provisions[existingIdx].content.length) {
+        provisions[existingIdx] = {
+          provision_ref: provisionRef,
+          chapter: currentChapter,
+          section: articleNum,
+          title,
+          content: content.substring(0, 12000),
+        };
+      }
+      continue;
+    }
+
+    seenArticles.set(articleNum, provisions.length);
+    provisions.push({
+      provision_ref: provisionRef,
+      chapter: currentChapter,
+      section: articleNum,
+      title,
+      content: content.substring(0, 12000),
+    });
+
+    // Extract definitions from interpretation articles
+    if (
+      title.toLowerCase().includes('giải thích') ||
+      title.toLowerCase().includes('từ ngữ') ||
+      title.toLowerCase().includes('interpretation') ||
+      title.toLowerCase().includes('definition')
+    ) {
+      extractDefinitions(content, provisionRef, definitions);
+    }
+  }
+
+  return {
+    id: act.id,
+    type: 'statute',
+    title: act.title,
+    title_en: act.titleEn,
+    short_name: act.shortName,
+    status: act.status,
+    issued_date: act.issuedDate,
+    in_force_date: act.inForceDate,
+    url: act.url,
+    description: act.description,
+    provisions,
+    definitions,
+  };
+}
+
+/**
+ * Fallback parser: extract articles using text-based "Điều N." pattern.
+ * Used when HTML does not contain <a name="dieu_N"> anchors.
+ */
+function parseByTextPatterns(html: string, act: ActIndexEntry): ParsedAct {
+  const provisions: ParsedProvision[] = [];
+  const definitions: ParsedDefinition[] = [];
+
   const plainText = stripHtml(html);
 
-  // Track current chapter as we parse through articles sequentially
   let currentChapter: string | undefined;
 
-  // Match "Điều N." anywhere in the text. Vietnamese uses "Điều" (with diacritics).
-  // The number may include letters for amendments (e.g., "Điều 26a").
-  // Title follows on the same line after the period.
-  //
-  // Pattern matches: "Điều 1.", "Điều 23.", "Điều 100a." etc.
-  // We use a word boundary or punctuation before "Điều" to avoid matching
-  // mid-word occurrences, but don't require newline since thuvienphapluat.vn
-  // often renders articles inline after stripping HTML tags.
+  // Match "Điều N." anywhere in the text
   const articlePattern = /(?:^|[\n.;)\]])[\s]*Đi[eề]u\s+(\d+[a-zA-Z]?)\s*\.\s*/g;
   const articleStarts: { num: string; index: number; matchEnd: number }[] = [];
   let match: RegExpExecArray | null;
@@ -128,8 +307,7 @@ export function parseVietnameseHtml(html: string, act: ActIndexEntry): ParsedAct
     });
   }
 
-  // Also scan for chapter headings to track context.
-  // Pattern: "Chương I", "Chương II", "CHƯƠNG I" etc.
+  // Chapter headings
   const chapterPattern = /(?:^|[\n.])[\s]*(Ch[uư][oơ]ng\s+[IVXLCDM]+[^\n.]*)/gi;
   const chapterPositions: { pos: number; name: string }[] = [];
   let chapterMatch: RegExpExecArray | null;
@@ -139,8 +317,7 @@ export function parseVietnameseHtml(html: string, act: ActIndexEntry): ParsedAct
     chapterPositions.push({ pos: chapterMatch.index, name: chapterName });
   }
 
-  // Deduplicate articles by number (keep the first occurrence that has substantial content)
-  const seenArticles = new Map<string, number>(); // articleNum -> index in provisions
+  const seenArticles = new Map<string, number>();
 
   for (let i = 0; i < articleStarts.length; i++) {
     const artStart = articleStarts[i];
@@ -148,7 +325,6 @@ export function parseVietnameseHtml(html: string, act: ActIndexEntry): ParsedAct
       ? articleStarts[i + 1].index
       : plainText.length;
 
-    // Update current chapter based on position
     for (const cp of chapterPositions) {
       if (cp.pos < artStart.index) {
         currentChapter = cp.name;
@@ -157,14 +333,10 @@ export function parseVietnameseHtml(html: string, act: ActIndexEntry): ParsedAct
 
     const articleNum = artStart.num;
     const provisionRef = `dieu${articleNum}`;
-
-    // Extract the content between this article marker and the next
     const rawContent = plainText.substring(artStart.matchEnd, artEnd).trim();
 
-    // Skip very short content (likely a cross-reference, not an actual article)
     if (rawContent.length < 15) continue;
 
-    // The title is typically the first line (up to the first newline)
     const firstNewline = rawContent.indexOf('\n');
     let title: string;
     let content: string;
@@ -173,7 +345,6 @@ export function parseVietnameseHtml(html: string, act: ActIndexEntry): ParsedAct
       title = rawContent.substring(0, firstNewline).trim();
       content = rawContent.trim();
     } else {
-      // No clear line break - use first sentence or first 120 chars as title
       const firstSentenceEnd = rawContent.search(/[.;]\s/);
       if (firstSentenceEnd > 0 && firstSentenceEnd < 200) {
         title = rawContent.substring(0, firstSentenceEnd + 1).trim();
@@ -185,7 +356,6 @@ export function parseVietnameseHtml(html: string, act: ActIndexEntry): ParsedAct
     }
 
     if (content.length > 10) {
-      // Deduplicate: keep the longer content version
       const existingIdx = seenArticles.get(articleNum);
       if (existingIdx !== undefined) {
         if (content.length > provisions[existingIdx].content.length) {
@@ -206,12 +376,10 @@ export function parseVietnameseHtml(html: string, act: ActIndexEntry): ParsedAct
         chapter: currentChapter,
         section: articleNum,
         title,
-        content: content.substring(0, 12000), // Cap at 12K chars
+        content: content.substring(0, 12000),
       });
     }
 
-    // Extract definitions from interpretation articles (typically Điều 2 or Điều 3)
-    // Vietnamese definitions use pattern: "N. Term là/means ..."
     if (
       title.toLowerCase().includes('giải thích') ||
       title.toLowerCase().includes('từ ngữ') ||
@@ -240,25 +408,12 @@ export function parseVietnameseHtml(html: string, act: ActIndexEntry): ParsedAct
 
 /**
  * Extract term definitions from an interpretation/definition article.
- *
- * Vietnamese definitions typically appear as numbered clauses:
- *   1. Term là definition text.
- *   2. Another term là definition text.
- *
- * "là" means "is/means" in Vietnamese.
- *
- * On thuvienphapluat.vn, content is often inline without newlines between
- * numbered items, so we match "N. Term là ..." followed by "N+1." or end.
  */
 function extractDefinitions(
   content: string,
   sourceProvision: string,
   definitions: ParsedDefinition[],
 ): void {
-  // Match numbered definition entries: "N. Term là ..."
-  // Content may be inline (no newlines) so we match from one numbered item to the next.
-  // Pattern: digit(s) + "." + term text + "là/bao gồm/có nghĩa là" + definition text
-  // Terminated by the next numbered definition or end of string.
   const defPattern = /(\d+)\s*\.\s+(.+?)\s+(?:là|bao gồm|có nghĩa là)\s+(.+?)(?=\d+\s*\.\s+\S|\s*$)/g;
   let defMatch: RegExpExecArray | null;
 
@@ -266,7 +421,6 @@ function extractDefinitions(
     const term = defMatch[2].replace(/\s+/g, ' ').trim();
     const definition = defMatch[3].replace(/\s+/g, ' ').trim();
 
-    // Validate: term should be reasonable length, definition should be substantial
     if (term.length > 0 && term.length < 200 && definition.length > 5) {
       definitions.push({
         term,
@@ -279,16 +433,7 @@ function extractDefinitions(
 
 /**
  * Pre-configured list of key Vietnamese legislation to ingest.
- *
- * Source: Thu Vien Phap Luat (thuvienphapluat.vn)
- * URLs follow: https://thuvienphapluat.vn/van-ban/{Category}/{Slug}.aspx
- *
- * These are the most important laws and decrees for cybersecurity, data protection,
- * information technology, and compliance use cases in Vietnam.
- *
- * Vietnamese legislation numbering:
- *   - Laws: No. XX/YYYY/QHZZ (e.g., 24/2018/QH14 = Law No. 24, Year 2018, 14th National Assembly)
- *   - Decrees: No. XX/YYYY/ND-CP (e.g., 13/2023/ND-CP = Decree No. 13, Year 2023, Government)
+ * Used as fallback when census.json is not available.
  */
 export const KEY_VIETNAMESE_ACTS: ActIndexEntry[] = [
   {
@@ -301,7 +446,7 @@ export const KEY_VIETNAMESE_ACTS: ActIndexEntry[] = [
     inForceDate: '2019-01-01',
     url: 'https://thuvienphapluat.vn/van-ban/Cong-nghe-thong-tin/Luat-An-ninh-mang-2018-351416.aspx',
     officialNumber: '24/2018/QH14',
-    description: 'Comprehensive cybersecurity law establishing data localization requirements, critical information system protection, and cybersecurity incident response obligations. Administered by Ministry of Public Security.',
+    description: 'Comprehensive cybersecurity law.',
   },
   {
     id: 'personal-data-protection-decree-2023',
@@ -313,55 +458,7 @@ export const KEY_VIETNAMESE_ACTS: ActIndexEntry[] = [
     inForceDate: '2023-07-01',
     url: 'https://thuvienphapluat.vn/van-ban/Cong-nghe-thong-tin/Nghi-dinh-13-2023-ND-CP-bao-ve-du-lieu-ca-nhan-559733.aspx',
     officialNumber: '13/2023/NĐ-CP',
-    description: 'Vietnam\'s primary personal data protection regulation. Establishes data subject rights, consent requirements, cross-border data transfer rules, data controller and processor obligations, and impact assessment requirements.',
-  },
-  {
-    id: 'information-technology-law-2006',
-    title: 'Luật Công nghệ thông tin 2006',
-    titleEn: 'Law on Information Technology 2006',
-    shortName: 'Luật CNTT 2006',
-    status: 'in_force',
-    issuedDate: '2006-06-29',
-    inForceDate: '2007-01-01',
-    url: 'https://thuvienphapluat.vn/van-ban/Cong-nghe-thong-tin/Luat-Cong-nghe-thong-tin-2006-67-2006-QH11-12987.aspx',
-    officialNumber: '67/2006/QH11',
-    description: 'Foundational IT law regulating IT applications, IT industry development, digital content, electronic communications, and information security measures.',
-  },
-  {
-    id: 'enterprise-law-2020',
-    title: 'Luật Doanh nghiệp 2020',
-    titleEn: 'Enterprise Law 2020',
-    shortName: 'Luật DN 2020',
-    status: 'in_force',
-    issuedDate: '2020-06-17',
-    inForceDate: '2021-01-01',
-    url: 'https://thuvienphapluat.vn/van-ban/Doanh-nghiep/Luat-Doanh-nghiep-2020-so-59-2020-QH14-437468.aspx',
-    officialNumber: '59/2020/QH14',
-    description: 'Comprehensive enterprise/company law governing establishment, organization, restructuring, and dissolution of enterprises. Includes corporate governance and shareholder rights.',
-  },
-  {
-    id: 'e-transactions-law-2023',
-    title: 'Luật Giao dịch điện tử 2023',
-    titleEn: 'Law on E-Transactions 2023',
-    shortName: 'Luật GDDT 2023',
-    status: 'in_force',
-    issuedDate: '2023-06-22',
-    inForceDate: '2024-07-01',
-    url: 'https://thuvienphapluat.vn/van-ban/Cong-nghe-thong-tin/Luat-Giao-dich-dien-tu-2023-20-2023-QH15-567171.aspx',
-    officialNumber: '20/2023/QH15',
-    description: 'Modernized e-transactions law replacing the 2005 version. Governs electronic signatures, digital certificates, electronic contracts, and trust services. Recognizes blockchain and distributed ledger technology.',
-  },
-  {
-    id: 'consumer-rights-protection-law-2023',
-    title: 'Luật Bảo vệ quyền lợi người tiêu dùng 2023',
-    titleEn: 'Law on Protection of Consumer Rights 2023',
-    shortName: 'Luật BVQLNTD 2023',
-    status: 'in_force',
-    issuedDate: '2023-06-20',
-    inForceDate: '2024-07-01',
-    url: 'https://thuvienphapluat.vn/van-ban/Thuong-mai/Luat-Bao-ve-quyen-loi-nguoi-tieu-dung-2023-19-2023-QH15-567169.aspx',
-    officialNumber: '19/2023/QH15',
-    description: 'Updated consumer protection law replacing the 2010 version. Strengthens consumer rights in e-commerce transactions, data protection obligations for businesses, and dispute resolution mechanisms.',
+    description: 'Vietnam\'s primary PDP regulation.',
   },
   {
     id: 'constitution-2013',
@@ -373,7 +470,7 @@ export const KEY_VIETNAMESE_ACTS: ActIndexEntry[] = [
     inForceDate: '2014-01-01',
     url: 'https://thuvienphapluat.vn/van-ban/Bo-may-hanh-chinh/Hien-phap-nam-2013-215627.aspx',
     officialNumber: 'N/A',
-    description: 'Supreme law of Vietnam. Article 21 guarantees the right to privacy of personal life, family secrets, and correspondence. Article 25 guarantees freedom of speech, press, and access to information.',
+    description: 'Supreme law of Vietnam.',
   },
   {
     id: 'penal-code-2015',
@@ -385,30 +482,18 @@ export const KEY_VIETNAMESE_ACTS: ActIndexEntry[] = [
     inForceDate: '2018-01-01',
     url: 'https://thuvienphapluat.vn/van-ban/Trach-nhiem-hinh-su/Bo-luat-hinh-su-2015-296661.aspx',
     officialNumber: '100/2015/QH13',
-    description: 'Criminal code with cybercrime provisions. Articles 285-294 cover computer crimes including unauthorized access, malware distribution, illegal data collection, and online fraud. Amended by Law 12/2017/QH14.',
+    description: 'Penal code with cybercrime provisions.',
   },
   {
-    id: 'telecommunications-law-2009',
-    title: 'Luật Viễn thông 2009',
-    titleEn: 'Law on Telecommunications 2009',
-    shortName: 'Luật VT 2009',
+    id: 'enterprise-law-2020',
+    title: 'Luật Doanh nghiệp 2020',
+    titleEn: 'Enterprise Law 2020',
+    shortName: 'Luật DN 2020',
     status: 'in_force',
-    issuedDate: '2009-11-23',
-    inForceDate: '2010-07-01',
-    url: 'https://thuvienphapluat.vn/van-ban/Cong-nghe-thong-tin/Luat-vien-thong-2009-41-2009-QH12-98328.aspx',
-    officialNumber: '41/2009/QH12',
-    description: 'Telecommunications regulation governing network infrastructure, licensing, interconnection, spectrum management, and subscriber data protection. Administered by Ministry of Information and Communications.',
-  },
-  {
-    id: 'competition-law-2018',
-    title: 'Luật Cạnh tranh 2018',
-    titleEn: 'Law on Competition 2018',
-    shortName: 'Luật CT 2018',
-    status: 'in_force',
-    issuedDate: '2018-06-12',
-    inForceDate: '2019-07-01',
-    url: 'https://thuvienphapluat.vn/van-ban/Thuong-mai/Luat-canh-tranh-2018-23-2018-QH14-353991.aspx',
-    officialNumber: '23/2018/QH14',
-    description: 'Competition and antitrust law regulating anti-competitive agreements, abuse of dominant market position, economic concentrations (mergers), and unfair competitive practices. Replaces the 2004 Competition Law.',
+    issuedDate: '2020-06-17',
+    inForceDate: '2021-01-01',
+    url: 'https://thuvienphapluat.vn/van-ban/Doanh-nghiep/Luat-Doanh-nghiep-2020-so-59-2020-QH14-437468.aspx',
+    officialNumber: '59/2020/QH14',
+    description: 'Enterprise/company law.',
   },
 ];
